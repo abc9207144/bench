@@ -1,0 +1,119 @@
+---
+# ======================================================================
+# 區塊 1: 根據作業系統安裝 MariaDB 套件 (此區塊保持不變)
+# ======================================================================
+- include: centos.yml
+  when: ansible_distribution == 'CentOS' and ansible_distribution_major_version|int >= 6
+
+- include: ubuntu-trusty.yml
+  when: ansible_distribution == 'Ubuntu' and ansible_distribution_version == '14.04'
+
+- include: ubuntu-xenial_bionic.yml
+  when: ansible_distribution == 'Ubuntu' and ansible_distribution_major_version|int >= 16
+
+- include_tasks: debian.yml
+  when: ansible_distribution == 'Debian'
+
+# ======================================================================
+# 區塊 2: 寫入所有 MariaDB 設定檔
+# 將所有設定檔修改任務集中在此，任何變更都會通知 handler 準備重啟。
+# ======================================================================
+
+- name: Add main configuration from template (for non-Debian)
+  template:
+    src: '{{ mysql_conf_tpl }}'
+    dest: '{{ mysql_conf_dir[ansible_distribution] }}/{{ mysql_conf_file }}'
+    owner: root
+    group: root
+    mode: 0644
+  when: mysql_conf_tpl != 'change_me' and ansible_distribution != 'Debian'
+  notify: restart mysql
+
+- name: Add main configuration from template (for Debian)
+  template:
+    src: '{{ mysql_conf_tpl }}'
+    dest: '{{ mysql_conf_dir[ansible_distribution] }}/{{ mysql_conf_file }}'
+    owner: root
+    group: root
+    mode: 0644
+  when: mysql_conf_tpl != 'change_me' and ansible_distribution == 'Debian'
+  notify: restart mysql
+
+- name: Ensure mariadb.conf.d directory is included
+  blockinfile:
+    path: /etc/mysql/conf.d/settings.cnf
+    block: |
+      # Import all .cnf files from configuration directory
+      !includedir /etc/mysql/mariadb.conf.d/
+    create: yes # 確保檔案不存在時會被建立
+  become: yes
+  become_user: root
+  when: ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian'
+  notify: restart mysql
+
+# 這就是你之前出錯的任務，現在已修正並放在正確的位置
+- name: Add Frappe/ERPNext required MariaDB configurations
+  blockinfile:
+    path: /etc/mysql/mariadb.conf.d/erpnext.cnf
+    block: |
+      [mysqld]
+      pid-file        = /var/run/mysqld/mysqld.pid
+      socket          = /var/run/mysqld/mysqld.sock
+      default-authentication-plugin=mysql_native_password
+      character-set-client-handshake = FALSE
+      character-set-server = utf8mb4
+      collation-server = utf8mb4_unicode_ci
+
+      [mysql]
+      default-character-set = utf8mb4
+    create: yes
+  become: yes
+  become_user: root
+  when: ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian'
+  notify: restart mysql
+
+# ======================================================================
+# 區塊 3: 強制執行 Handler，讓服務帶著最新設定重啟和運行
+# ======================================================================
+- name: Flush handlers to apply all configurations and restart MariaDB
+  meta: flush_handlers
+
+- name: Ensure MariaDB service is running and enabled after restart
+  service:
+    name: mysql
+    state: started
+    enabled: yes
+  become: yes
+
+# ======================================================================
+# 區塊 4: 設定密碼並建立管理員設定檔 (解決 Access Denied 的核心)
+# ======================================================================
+- name: Set MariaDB root password
+  command: mysql -NBe "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('{{ mysql_root_password }}');"
+  become: yes
+  changed_when: false
+  when: mysql_root_password is defined
+
+- name: Create .my.cnf for root user to allow passwordless management
+  template:
+    src: root-my.cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: '0600'
+  become: yes
+  when: mysql_root_password is defined
+
+# ======================================================================
+# 區塊 5: 執行後續腳本和偵錯
+# ======================================================================
+- debug:
+    msg: "MariaDB root password variable is set."
+  when: mysql_root_password is defined
+
+- include_tasks: mysql_secure_installation.yml
+  when: mysql_root_password is defined
+
+- debug:
+    var: mysql_secure_installation
+  when: mysql_secure_installation is defined and mysql_secure_installation
