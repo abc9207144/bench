@@ -18,6 +18,8 @@
     command: "bench new-site {{ site }} --admin-password '{{ admin_password }}' --mariadb-root-password '{{ mysql_root_password }}'"
     args:
       chdir: "{{ bench_path }}"
+    become: yes              # <-- 添加此行
+    become_user: frappe      # <-- 添加此行，這是關鍵！
     when: not site_folder.stat.exists
 
   - name: Install ERPNext to default site
