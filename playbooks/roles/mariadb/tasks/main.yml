@@ -88,11 +88,14 @@
 # ======================================================================
 # 區塊 4: 設定密碼並建立管理員設定檔 (解決 Access Denied 的核心)
 # ======================================================================
-- name: Set MariaDB root password
-  command: mysql -NBe "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('{{ mysql_root_password }}');"
+- name: Change MariaDB root user auth to native password and set password
+  command: >
+    mysql -u root -e "UPDATE mysql.user SET plugin = 'mysql_native_password' WHERE User = 'root' AND Host = 'localhost';
+    SET PASSWORD FOR 'root'@'localhost' = PASSWORD('{{ mysql_root_password }}');
+    FLUSH PRIVILEGES;"
   become: yes
-  changed_when: false
-  when: mysql_root_password is defined
+  changed_when: false # 設為 false 因為這個命令應該只執行一次，避免重複報告 "changed"
+  when: mysql_root_password is defined and mysql_root_password
 
 - name: Create .my.cnf for root user to allow passwordless management
   template:
@@ -103,6 +106,7 @@
     mode: '0600'
   become: yes
   when: mysql_root_password is defined
+
 
 # ======================================================================
 # 區塊 5: 執行後續腳本和偵錯
