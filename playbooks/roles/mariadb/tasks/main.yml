@@ -117,9 +117,3 @@
 - debug:
     var: mysql_secure_installation
   when: mysql_secure_installation is defined and mysql_secure_installation
-
-- name: Change MariaDB root user authentication to mysql_native_password
-  command: mysql -NBe "UPDATE mysql.user SET plugin = 'mysql_native_password' WHERE user = 'root'; FLUSH PRIVILEGES;"
-  become: yes
-  changed_when: false # 這個指令即使成功也不應被標記為 'changed'
-  when: mysql_root_password is defined
