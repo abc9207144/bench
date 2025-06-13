@@ -101,15 +101,37 @@
 
 # 步驟 2: 使用冪等的 mysql_user 模組來設定 root 使用者。
 # 這個模組會自動處理 unix_socket 到 native_password 的轉換，且重複執行不會出錯。
-- name: Set MariaDB root password
+- name: Check current auth plugin for root@localhost
+  command: mysql -NBe "SELECT plugin FROM mysql.user WHERE User = 'root' AND Host = 'localhost'"
+  register: root_plugin_check
+  changed_when: false # 這個查詢本身不產生變更
+  failed_when: false  # 即使初始 Access Denied 也不要失敗，讓後續任務修復
+  become: yes
+  when: mysql_root_password is defined and mysql_root_password
+
+# 步驟 3: 如果插件不是 'mysql_native_password'，則強制修改它。
+- name: Force change to native password plugin if needed
+  command: >
+    mysql -e "UPDATE mysql.user SET plugin = 'mysql_native_password' WHERE User = 'root' AND Host = 'localhost'; FLUSH PRIVILEGES;"
+  become: yes
+  # 只有當檢查結果顯示插件不是我們想要的 'mysql_native_password' 時才執行此任務
+  when:
+    - mysql_root_password is defined and mysql_root_password
+    - "'mysql_native_password' not in root_plugin_check.stdout"
+
+# 步驟 4: 現在插件已正確，使用 mysql_user 模組安全地設定/更新 root 密碼。
+# 這個模組在設定密碼方面是冪等的。
+- name: Ensure MariaDB root user password is set
   mysql_user:
     name: root
     host: localhost
-    password: "{{ mysql_root_password }}" # 服務已經預期要用密碼了
+    password: "{{ mysql_root_password }}"
+    # login_unix_socket 在某些情況下需要，但現在 .my.cnf 應該能處理登入了
     state: present
   become: yes
   when: mysql_root_password is defined and mysql_root_password
 
+# 步驟 5: 確保 root 擁有所有權限。
 - name: Ensure MariaDB root user has all privileges
   mysql_user:
     name: root
@@ -118,7 +140,7 @@
     priv: "*.*:ALL,GRANT"
     state: present
   become: yes
-  when: mysql_root_password is defined and mysql_root_password
+  when: mysql_root_password is defined and mysql_root_password  
 
 # ======================================================================
 # 區塊 5: 執行安全腳本和偵錯
