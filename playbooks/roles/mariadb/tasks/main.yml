@@ -104,15 +104,15 @@
 - name: Check current auth plugin for root@localhost
   command: mysql -NBe "SELECT plugin FROM mysql.user WHERE User = 'root' AND Host = 'localhost'"
   register: root_plugin_check
-  changed_when: false # 這個查詢本身不產生變更
-  failed_when: false  # 即使初始 Access Denied 也不要失敗，讓後續任務修復
+  changed_when: false
+  failed_when: false
   become: yes
   when: mysql_root_password is defined and mysql_root_password
 
 # 步驟 3: 如果插件不是 'mysql_native_password'，則強制修改它。
-- name: Force change to native password plugin if needed
+- name: Atomically set native password plugin and password for root user
   command: >
-    mysql -e "UPDATE mysql.user SET plugin = 'mysql_native_password' WHERE User = 'root' AND Host = 'localhost'; FLUSH PRIVILEGES;"
+    mysql -e "UPDATE mysql.user SET plugin='mysql_native_password', password=PASSWORD('{{ mysql_root_password }}') WHERE User='root' AND Host='localhost'; FLUSH PRIVILEGES;"
   become: yes
   when:
     - mysql_root_password is defined and mysql_root_password
@@ -121,13 +121,13 @@
 
 # 步驟 4: 現在插件已正確，使用 mysql_user 模組安全地設定/更新 root 密碼。
 # 這個模組在設定密碼方面是冪等的。
-- name: Ensure MariaDB root user password is set
+- name: Ensure MariaDB root user has all privileges
   mysql_user:
     name: root
     host: localhost
-    password: "{{ mysql_root_password }}"
-    login_user: root                          # <--- 新增
-    login_password: "{{ mysql_root_password }}" # <--- 新增
+    priv: "*.*:ALL,GRANT"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
     state: present
   become: yes
   when: mysql_root_password is defined and mysql_root_password
