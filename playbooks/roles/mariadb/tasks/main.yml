@@ -114,10 +114,10 @@
   command: >
     mysql -e "UPDATE mysql.user SET plugin = 'mysql_native_password' WHERE User = 'root' AND Host = 'localhost'; FLUSH PRIVILEGES;"
   become: yes
-  # 只有當檢查結果顯示插件不是我們想要的 'mysql_native_password' 時才執行此任務
   when:
     - mysql_root_password is defined and mysql_root_password
     - "'mysql_native_password' not in root_plugin_check.stdout"
+
 
 # 步驟 4: 現在插件已正確，使用 mysql_user 模組安全地設定/更新 root 密碼。
 # 這個模組在設定密碼方面是冪等的。
@@ -126,7 +126,8 @@
     name: root
     host: localhost
     password: "{{ mysql_root_password }}"
-    # login_unix_socket 在某些情況下需要，但現在 .my.cnf 應該能處理登入了
+    login_user: root                          # <--- 新增
+    login_password: "{{ mysql_root_password }}" # <--- 新增
     state: present
   become: yes
   when: mysql_root_password is defined and mysql_root_password
@@ -138,9 +139,11 @@
     host: localhost
     password: "{{ mysql_root_password }}"
     priv: "*.*:ALL,GRANT"
+    login_user: root                          # <--- 新增
+    login_password: "{{ mysql_root_password }}" # <--- 新增
     state: present
   become: yes
-  when: mysql_root_password is defined and mysql_root_password  
+  when: mysql_root_password is defined and mysql_root_password
 
 # ======================================================================
 # 區塊 5: 執行安全腳本和偵錯
