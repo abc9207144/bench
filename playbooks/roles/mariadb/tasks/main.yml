@@ -101,16 +101,12 @@
 
 # 步驟 2: 使用冪等的 mysql_user 模組來設定 root 使用者。
 # 這個模組會自動處理 unix_socket 到 native_password 的轉換，且重複執行不會出錯。
-- name: Ensure MariaDB root user uses native password authentication
+- name: Set MariaDB root password
   mysql_user:
     name: root
     host: localhost
-    password: "{{ mysql_root_password }}"
-    plugin: mysql_native_password
+    password: "{{ mysql_root_password }}" # 服務已經預期要用密碼了
     state: present
-    # login_unix_socket: /var/run/mysqld/mysqld.sock # 在某些系統上可能需要這個來進行初始連接
-    # login_user: root # 使用 .my.cnf 後，這些通常不再需要
-    # login_password: "{{ mysql_root_password }}"
   become: yes
   when: mysql_root_password is defined and mysql_root_password
 
