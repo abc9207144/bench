@@ -110,12 +110,13 @@
   become: yes
   when: mysql_root_password is defined and mysql_root_password
 
-- name: Set native password plugin if unix_socket is currently used
-  command: "mysql -NBe \"ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ mysql_root_password }}'; FLUSH PRIVILEGES;\""
+# THIS IS THE NEW, CORRECT TASK FOR MARIADB 10.1
+- name: Set native password plugin and password if unix_socket is currently used
+  command: "mysql -NBe \"UPDATE mysql.user SET plugin='mysql_native_password' WHERE User='root' AND Host='localhost'; SET PASSWORD FOR 'root'@'localhost' = PASSWORD('{{ mysql_root_password }}'); FLUSH PRIVILEGES;\""
   become: yes
   when:
     - mysql_root_password is defined and mysql_root_password
-    - "'unix_socket' in root_auth_plugin.stdout"
+    - "'unix_socket' in root_auth_plugin.stdout or 'auth_socket' in root_auth_plugin.stdout"
 
 # -------------------- 已移除的任務 --------------------
 # - name: Check current auth plugin for root@localhost  <--- 移除，讓模組處理
