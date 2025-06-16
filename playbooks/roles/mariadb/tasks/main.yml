@@ -101,9 +101,7 @@
   become: yes
   when: mysql_root_password is defined and mysql_root_password
 
-# 步驟 2: 【核心修正】使用單一、冪等的 mysql_user 任務來設定 root 密碼並授予權限。
-# 移除所有手動檢查插件和使用 `command` 模組更新 `mysql.user` 表的脆弱步驟。
-# mysql_user 模組會自動處理初始設定（使用 unix_socket）和後續更新（使用 /root/.my.cnf）。
+# 步驟 2: 【核心修正】使用單一、冪等的 mysql_user 任務，並明確指定憑證檔案路徑。
 - name: Ensure MariaDB root user is configured with the correct password and privileges
   mysql_user:
     name: root
@@ -111,9 +109,7 @@
     password: "{{ mysql_root_password }}"
     priv: "*.*:ALL,GRANT"
     state: present
-    # 不需要 login_user 和 login_password，因為：
-    # 1. 首次執行時，`become: yes` 會讓 Ansible 使用 unix_socket 登入。
-    # 2. 後續執行時，`mysql` 客戶端會自動讀取 /root/.my.cnf。
+    config_file: /root/.my.cnf # <--- 【核心修正】明確指定憑證檔案的路徑
   become: yes
   when: mysql_root_password is defined and mysql_root_password
 
