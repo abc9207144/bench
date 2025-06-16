@@ -109,7 +109,9 @@
     password: "{{ mysql_root_password }}"
     priv: "*.*:ALL,GRANT"
     state: present
-    config_file: /root/.my.cnf # <--- 【核心修正】明確指定憑證檔案的路徑
+    auth_plugin: mysql_native_password  # <--  ADD THIS LINE
+    login_unix_socket: /var/run/mysqld/mysqld.sock # <-- Add for reliability
+    config_file: /root/.my.cnf
   become: yes
   when: mysql_root_password is defined and mysql_root_password
 
