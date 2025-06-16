@@ -102,18 +102,20 @@
   when: mysql_root_password is defined and mysql_root_password
 
 # 步驟 2: 【核心修正】使用單一、冪等的 mysql_user 任務，並明確指定憑證檔案路徑。
-- name: Ensure MariaDB root user is configured with the correct password and privileges
-  mysql_user:
-    name: root
-    host: localhost
-    password: "{{ mysql_root_password }}"
-    priv: "*.*:ALL,GRANT"
-    state: present
-    auth_plugin: mysql_native_password  # <--  ADD THIS LINE
-    login_unix_socket: /var/run/mysqld/mysqld.sock # <-- Add for reliability
-    config_file: /root/.my.cnf
+# This is the task that is currently failing. REMOVE IT.
+- name: Check current auth plugin for root@localhost
+  command: mysql -NBe "SELECT plugin FROM mysql.user WHERE User='root' AND Host='localhost';"
+  register: root_auth_plugin
+  changed_when: false
   become: yes
   when: mysql_root_password is defined and mysql_root_password
+
+- name: Set native password plugin if unix_socket is currently used
+  command: "mysql -NBe \"ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '{{ mysql_root_password }}'; FLUSH PRIVILEGES;\""
+  become: yes
+  when:
+    - mysql_root_password is defined and mysql_root_password
+    - "'unix_socket' in root_auth_plugin.stdout"
 
 # -------------------- 已移除的任務 --------------------
 # - name: Check current auth plugin for root@localhost  <--- 移除，讓模組處理
